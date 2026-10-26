@@ -1,0 +1,110 @@
+name: Build macOS package
+
+# Builds a universal (arm64 + Intel) VST3 / AU / standalone app, plus one
+# engine per CPU type, and wraps them in a .pkg inside a .dmg.
+# Runs on tags (v*) or when you click "Run workflow" on the Actions tab.
+# NOTE: macOS runners bill at 10x minutes on a private repo.
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  plugin:
+    name: Plugin (universal)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build VST3 + AU + app (arm64 + x86_64)
+        run: |
+          cmake -S plugin -B build -G Xcode \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+          cmake --build build --config Release
+
+      - name: Pack the bundles (tar keeps bundle structure + perms)
+        run: |
+          cd build/TRANSFORM6_artefacts/Release
+          tar -czf "$GITHUB_WORKSPACE/mac-plugin.tgz" VST3 AU Standalone
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-plugin
+          path: mac-plugin.tgz
+
+  engine:
+    name: Engine (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-14
+          - arch: x86_64
+            runner: macos-13
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install engine libraries
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch torchaudio
+          pip install -r engine/requirements.txt
+          pip install --no-deps basic-pitch==0.4.0
+          pip install pyinstaller
+
+      - name: Get the 6-part splitting model
+        run: |
+          mkdir -p models
+          curl -L --fail -o models/5c90dfd2-34c22ccb.th https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/5c90dfd2-34c22ccb.th
+          python -c "import demucs,os,shutil; shutil.copy(os.path.join(os.path.dirname(demucs.__file__),'remote','htdemucs_6s.yaml'),'models')"
+
+      - name: Package engine
+        run: python engine/build_engine.py --models models
+
+      - name: Smoke-test the packaged engine
+        run: engine/dist/transform6-engine/transform6-engine --version
+
+      - name: Pack the engine (keeps dylibs + perms)
+        run: tar -czf "$GITHUB_WORKSPACE/mac-engine-${{ matrix.arch }}.tgz" -C engine/dist transform6-engine
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-engine-${{ matrix.arch }}
+          path: mac-engine-${{ matrix.arch }}.tgz
+
+  package:
+    name: .pkg + .dmg
+    needs: [ plugin, engine ]
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: stage }
+
+      - name: Build TRANSFORM-6-macOS.dmg
+        env:
+          STAGE: stage
+        run: |
+          chmod +x installer/mac/build-pkg.sh
+          ./installer/mac/build-pkg.sh "${GITHUB_REF_NAME#v}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TRANSFORM-6-macOS
+          path: installer/Output/TRANSFORM-6-macOS.dmg
+
+      - name: Publish release (when tagged v1.0.0 etc.)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer/Output/TRANSFORM-6-macOS.dmg

@@ -61,6 +61,21 @@ juce::File EngineRunner::findEngine() const
         candidates.add (local.getChildFile ("Programs").getChildFile ("TRANSFORM-6")
                              .getChildFile ("engine").getChildFile (engineExeName));
    #endif
+   #if JUCE_MAC
+    // The macOS package ships one engine per CPU type next to the app in
+    // /Applications/TRANSFORM-6. Pick the slice matching how we're running.
+    #if defined (__aarch64__)
+     const juce::String macArch = "engine-arm64";
+    #else
+     const juce::String macArch = "engine-x86_64";
+    #endif
+    const juce::File macBase ("/Applications/TRANSFORM-6");
+    candidates.add (macBase.getChildFile (macArch).getChildFile (engineExeName));
+    candidates.add (macBase.getChildFile ("engine").getChildFile (engineExeName));
+    auto appFolder = juce::File::getSpecialLocation (juce::File::currentApplicationFile).getParentDirectory();
+    candidates.add (appFolder.getChildFile (macArch).getChildFile (engineExeName));
+    candidates.add (appFolder.getChildFile ("engine").getChildFile (engineExeName));
+   #endif
 
     // 4. Next to the app or plugin itself
     auto here = juce::File::getSpecialLocation (juce::File::currentExecutableFile).getParentDirectory();

@@ -25,7 +25,7 @@ juce_add_plugin(TRANSFORM6
     BUNDLE_ID com.pathfinderpressings.transform6
     PLUGIN_MANUFACTURER_CODE Pfpr
     PLUGIN_CODE Trf6
-    FORMATS VST3 Standalone
+    FORMATS VST3 AU Standalone
     PRODUCT_NAME "TRANSFORM-6"
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
@@ -33,7 +33,11 @@ juce_add_plugin(TRANSFORM6
     IS_MIDI_EFFECT FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS TRUE
     COPY_PLUGIN_AFTER_BUILD FALSE
-    VST3_CATEGORIES Fx Analyzer Tools)
+    # macOS: the standalone records from the audio input, which needs mic consent
+    MICROPHONE_PERMISSION_ENABLED TRUE
+    MICROPHONE_PERMISSION_TEXT "TRANSFORM-6 records audio from your chosen input so you can turn it into MIDI."
+    VST3_CATEGORIES Fx Analyzer Tools
+    AU_MAIN_TYPE kAudioUnitType_Effect)
 
 target_sources(TRANSFORM6 PRIVATE
     Source/PluginProcessor.cpp

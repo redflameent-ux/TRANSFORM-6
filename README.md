@@ -60,6 +60,14 @@ If it ever says it can't find the engine, click **Find engine** and pick `C:\Pro
 
 ---
 
+## Installing on macOS
+
+Download **TRANSFORM-6-macOS.dmg** (a universal build — runs natively on Apple Silicon and Intel), open it, and read **READ-ME-FIRST.txt** inside. Because this is an unsigned test build, macOS Gatekeeper needs two quick steps: right-click the `.pkg` and choose *Open* to install, then run the one `xattr` command in the readme to clear the quarantine flag so the app and plugins load.
+
+It installs the VST3 (and an **AU** for Logic/GarageBand) into the standard plug-in folders, and the app plus engine into `/Applications/TRANSFORM-6`. Rescan plug-ins in your DAW. To record from an audio interface, allow microphone access when the standalone app asks.
+
+---
+
 ## What's inside (for the curious)
 
 | Folder | What it is |
