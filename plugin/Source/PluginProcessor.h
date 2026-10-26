@@ -43,6 +43,16 @@ public:
     bool isPreviewing (const juce::File& f) const;
     juce::File getPreviewFile() const;
 
+    // ---- recording (standalone: captures the audio-interface input) ----
+    bool startRecording (const juce::File& destWav);
+    void stopRecording();
+    bool isRecording() const noexcept            { return recording.load(); }
+    bool hasAudioInput() const noexcept          { return getTotalNumInputChannels() > 0; }
+    juce::File getRecordedFile() const           { return recordedFile; }
+    double recordedSeconds() const noexcept      { return currentRate > 0.0 ? (double) samplesRecorded.load() / currentRate : 0.0; }
+    float getRecordLevel() const noexcept        { return recordLevel.load(); }
+    float getRecordPeak() const noexcept         { return recordPeakMax.load(); }
+
     juce::AudioFormatManager formats;
     std::atomic<int> stateVersion { 0 };
 
@@ -55,6 +65,18 @@ private:
     double currentRate = 44100.0;
     int currentBlock = 512;
     juce::AudioBuffer<float> previewBuffer;
+
+    // recording: write the live input to a WAV on a background thread
+    juce::TimeSliceThread recordThread { "TRANSFORM-6 recorder" };
+    std::unique_ptr<juce::AudioFormatWriter::ThreadedWriter> threadedWriter;
+    juce::CriticalSection writerLock;
+    std::atomic<juce::AudioFormatWriter::ThreadedWriter*> activeWriter { nullptr };
+    std::atomic<bool> recording { false };
+    std::atomic<juce::int64> samplesRecorded { 0 };
+    std::atomic<float> recordLevel { 0.0f };
+    std::atomic<float> recordPeakMax { 0.0f };
+    int recordChans = 2;
+    juce::File recordedFile;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Sample2MidiProcessor)
 };
