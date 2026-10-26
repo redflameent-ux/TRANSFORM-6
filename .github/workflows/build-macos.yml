@@ -6,6 +6,7 @@ name: Build macOS package
 # NOTE: macOS runners bill at 10x minutes on a private repo.
 on:
   push:
+    branches: [ feature/macos-build ]   # temporary: test the pipeline on this branch
     tags: [ 'v*' ]
   workflow_dispatch:
 
