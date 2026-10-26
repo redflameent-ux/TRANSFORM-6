@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/transform6-banner.png" alt="TRANSFORM-6 — Sample 2 MIDI Matrix" width="900">
+</p>
+
 # TRANSFORM-6
 
 **Sample → MIDI Matrix.** Part of the TRANCE-6 utility suite, alongside the VIBRA-VII plugin.
