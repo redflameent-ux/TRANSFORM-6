@@ -8,6 +8,11 @@ on:
     tags: [ 'v*' ]
   workflow_dispatch:
 
+# The release step needs write access to create a GitHub Release + upload the
+# installer. The default GITHUB_TOKEN is read-only, which returns 403 on tags.
+permissions:
+  contents: write
+
 jobs:
   plugin:
     name: VST3 + app
