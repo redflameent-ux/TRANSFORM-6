@@ -31,6 +31,11 @@ Works as a **VST3 plugin** (FL Studio, Ableton Live) and as a **standalone app**
 
 Files are also saved to **Documents › TRANSFORM-6** (change it with *Save to*). *Open folder* takes you there.
 
+### Recording a sample (standalone app)
+Instead of dropping a file, click **Record** to capture straight from your audio interface, then **Stop** — the take loads automatically, ready to Convert. The live input level and elapsed time show on the bar while recording. Takes are saved under your output folder in a `recordings` subfolder.
+
+First time only: open the standalone app's **Options**, pick your interface as the input device, and make sure **"Mute audio input"** is unticked (it's on by default to prevent speaker feedback). If a take comes out silent, that setting is why.
+
 ### What it does with drums
 Drum parts come out as standard drum-kit MIDI: **kick = C1 (36), snare = D1 (38), closed hat = F#1 (42), open hat = A#1 (46)**. That lines up with FPC in FL Studio and Drum Rack in Ableton.
 

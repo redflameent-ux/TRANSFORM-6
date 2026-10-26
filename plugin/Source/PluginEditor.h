@@ -112,6 +112,7 @@ private:
     void pushOptions();
     void chooseOutputFolder();
     void findEngine();
+    void toggleRecord();
 
     Sample2MidiProcessor& proc;
     s2m::LookAndFeel lnf;
@@ -122,6 +123,7 @@ private:
     juce::Slider sensSlider;
     juce::TextEditor tempoEdit;
     juce::TextButton convertButton { "Convert to MIDI" }, cancelButton { "Cancel" };
+    juce::TextButton recordButton { "Record" };
     juce::TextButton outputButton, openFolderButton { "Open folder" },
                      detailsButton { "Details" }, engineButton { "Find engine" };
 

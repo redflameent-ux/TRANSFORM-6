@@ -353,6 +353,12 @@ Sample2MidiEditor::Sample2MidiEditor (Sample2MidiProcessor& p)
     cancelButton.onClick = [this] { proc.engine.cancel(); };
     addAndMakeVisible (cancelButton);
 
+    recordButton.setColour (juce::TextButton::buttonColourId, s2m::colours::panelHi);
+    recordButton.setTooltip ("Record from your audio input / interface, then convert it. "
+                             "In the standalone app, pick your input in Options.");
+    recordButton.onClick = [this] { toggleRecord(); };
+    addAndMakeVisible (recordButton);
+
     outputButton.setTooltip ("Where the MIDI and audio files are saved");
     outputButton.onClick = [this] { chooseOutputFolder(); };
     addAndMakeVisible (outputButton);
@@ -443,6 +449,61 @@ void Sample2MidiEditor::chooseOutputFolder()
                                   outputButton.setButtonText ("Save to: " + r.getFileName());
                               }
                           });
+}
+
+void Sample2MidiEditor::toggleRecord()
+{
+    if (proc.isRecording())
+    {
+        const float peak = proc.getRecordPeak();
+        proc.stopRecording();
+
+        auto f = proc.getRecordedFile();
+        if (f.existsAsFile() && proc.recordedSeconds() >= 0.0)
+        {
+            proc.options.input = f;
+            dropZone.setFile (f);
+        }
+
+        if (peak < 0.0005f)
+        {
+            messageText = "That take was silent. Open Options, choose your interface as the input, "
+                          "and untick \"Mute audio input\", then record again.";
+            lastOk = false;
+        }
+        else
+        {
+            messageText = "Recorded " + f.getFileName() + ". Hit Convert to MIDI.";
+            lastOk = true;
+        }
+    }
+    else
+    {
+        if (! proc.hasAudioInput())
+        {
+            messageText = "No audio input available. Run the standalone app and pick your interface in Options.";
+            lastOk = false;
+            repaint();
+            return;
+        }
+
+        auto stamp = juce::Time::getCurrentTime().formatted ("%Y%m%d-%H%M%S");
+        auto file = proc.options.outputFolder.getChildFile ("recordings")
+                        .getChildFile ("take-" + stamp + ".wav");
+
+        if (! proc.startRecording (file))
+        {
+            messageText = "Couldn't start recording.";
+            lastOk = false;
+        }
+        else
+        {
+            messageText = {};
+        }
+    }
+
+    resized();
+    repaint();
 }
 
 void Sample2MidiEditor::findEngine()
@@ -565,10 +626,17 @@ void Sample2MidiEditor::timerCallback()
 
     for (auto* r : rows) r->refreshPlayState();
 
-    convertButton.setEnabled (! s.running && proc.options.input.existsAsFile());
+    const bool rec = proc.isRecording();
+    convertButton.setEnabled (! s.running && ! rec && proc.options.input.existsAsFile());
     convertButton.setButtonText (s.running ? "Working..." : "Convert to MIDI");
     cancelButton.setVisible (s.running);
     modeBox.setEnabled (! s.running);
+
+    recordButton.setEnabled (! s.running);
+    recordButton.setButtonText (rec ? "Stop" : "Record");
+    recordButton.setColour (juce::TextButton::buttonColourId, rec ? s2m::colours::bad : s2m::colours::panelHi);
+    recordButton.setColour (juce::TextButton::textColourOffId, rec ? s2m::colours::bg : s2m::colours::text);
+
     repaint (progressArea.expanded (2, 24));
 }
 
@@ -589,14 +657,28 @@ void Sample2MidiEditor::paint (juce::Graphics& g)
     auto bar = progressArea.toFloat();
     g.setColour (s2m::colours::panel);
     g.fillRoundedRectangle (bar, 4.0f);
-    if (shownProgress > 0.0f && (running || ! lastOk || shownProgress >= 1.0f))
+    if (proc.isRecording())
+    {
+        const float lvl = juce::jlimit (0.0f, 1.0f, proc.getRecordLevel());
+        g.setColour (s2m::colours::bad);
+        g.fillRoundedRectangle (bar.withWidth (juce::jmax (4.0f, bar.getWidth() * lvl)), 4.0f);
+    }
+    else if (shownProgress > 0.0f && (running || ! lastOk || shownProgress >= 1.0f))
     {
         g.setColour (lastOk || running ? s2m::colours::accent : s2m::colours::bad);
         g.fillRoundedRectangle (bar.withWidth (juce::jmax (8.0f, bar.getWidth() * shownProgress)), 4.0f);
     }
     auto line = progressArea.translated (0, progressArea.getHeight() + 4).withHeight (18);
     g.setFont (juce::FontOptions (13.0f));
-    if (running)
+    if (proc.isRecording())
+    {
+        const int secs = (int) proc.recordedSeconds();
+        g.setColour (s2m::colours::bad);
+        g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
+        g.drawText (juce::String::formatted ("REC  %d:%02d", secs / 60, secs % 60),
+                    line, juce::Justification::centredLeft, true);
+    }
+    else if (running)
     {
         g.setColour (s2m::colours::text);
         g.drawText (statusText, line, juce::Justification::centredLeft, true);
@@ -658,10 +740,12 @@ void Sample2MidiEditor::resized()
     r.removeFromTop (14);
 
     auto actions = r.removeFromTop (40);
-    convertButton.setBounds (actions.removeFromLeft (190));
-    actions.removeFromLeft (10);
+    convertButton.setBounds (actions.removeFromLeft (170));
+    actions.removeFromLeft (8);
+    recordButton.setBounds (actions.removeFromLeft (100));
+    actions.removeFromLeft (8);
     cancelButton.setBounds (actions.removeFromLeft (90));
-    outputButton.setBounds (actions.removeFromRight (juce::jmin (230, actions.getWidth() - 10)));
+    outputButton.setBounds (actions.removeFromRight (juce::jmin (210, actions.getWidth() - 10)));
     r.removeFromTop (12);
 
     progressArea = r.removeFromTop (8);

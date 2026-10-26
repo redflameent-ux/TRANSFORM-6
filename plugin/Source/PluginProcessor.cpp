@@ -8,14 +8,17 @@ Sample2MidiProcessor::Sample2MidiProcessor()
 {
     formats.registerBasicFormats();
     readAheadThread.startThread();
+    recordThread.startThread();
     options.outputFolder = defaultOutputFolder();
 }
 
 Sample2MidiProcessor::~Sample2MidiProcessor()
 {
     stopPreview();
+    stopRecording();
     transport.setSource (nullptr);
     readAheadThread.stopThread (2000);
+    recordThread.stopThread (2000);
 }
 
 juce::File Sample2MidiProcessor::defaultOutputFolder() const
@@ -52,6 +55,31 @@ void Sample2MidiProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
 {
     juce::ScopedNoDenormals noDenormals;
     const int numSamples = buffer.getNumSamples();
+
+    // Capture the live input to disk while recording (standalone: the audio interface).
+    // Done before anything else so we store clean input, not the monitored passthrough.
+    // The lock pairs with stopRecording() so the writer can't be deleted mid-write.
+    {
+        const juce::ScopedLock sl (writerLock);
+        if (auto* writer = activeWriter.load())
+        {
+            const int nin = getTotalNumInputChannels();
+            if (nin > 0 && numSamples > 0)
+            {
+                const float* chans[2];
+                chans[0] = buffer.getReadPointer (0);
+                chans[1] = nin > 1 ? buffer.getReadPointer (1) : chans[0];
+                writer->write (chans, numSamples);
+                samplesRecorded.fetch_add ((juce::int64) numSamples);
+
+                const float pk = juce::jmax (buffer.getMagnitude (0, 0, numSamples),
+                                             nin > 1 ? buffer.getMagnitude (1, 0, numSamples) : 0.0f);
+                recordLevel.store (pk);
+                if (pk > recordPeakMax.load())
+                    recordPeakMax.store (pk);
+            }
+        }
+    }
 
     // Clear any output channels that have no matching input
     for (int ch = getTotalNumInputChannels(); ch < getTotalNumOutputChannels(); ++ch)
@@ -112,6 +140,53 @@ juce::File Sample2MidiProcessor::getPreviewFile() const
 {
     const juce::ScopedLock sl (previewLock);
     return transport.isPlaying() ? previewFile : juce::File();
+}
+
+bool Sample2MidiProcessor::startRecording (const juce::File& destWav)
+{
+    stopRecording();
+
+    const int nin = getTotalNumInputChannels();
+    if (nin <= 0 || currentRate <= 0.0)
+        return false;
+
+    destWav.getParentDirectory().createDirectory();
+    destWav.deleteFile();
+
+    std::unique_ptr<juce::FileOutputStream> fos (destWav.createOutputStream());
+    if (fos == nullptr)
+        return false;
+
+    juce::WavAudioFormat wav;
+    recordChans = juce::jlimit (1, 2, nin);
+    if (auto* writer = wav.createWriterFor (fos.get(), currentRate,
+                                            (unsigned int) recordChans, 24, {}, 0))
+    {
+        fos.release(); // the writer owns the stream now
+        samplesRecorded.store (0);
+        recordLevel.store (0.0f);
+        recordPeakMax.store (0.0f);
+        recordedFile = destWav;
+        threadedWriter.reset (new juce::AudioFormatWriter::ThreadedWriter (writer, recordThread, 1 << 15));
+
+        const juce::ScopedLock sl (writerLock);
+        activeWriter.store (threadedWriter.get());
+        recording.store (true);
+        return true;
+    }
+
+    return false;
+}
+
+void Sample2MidiProcessor::stopRecording()
+{
+    {
+        const juce::ScopedLock sl (writerLock);
+        activeWriter.store (nullptr);
+        recording.store (false);
+    }
+    threadedWriter.reset(); // flushes the FIFO and closes the file
+    recordLevel.store (0.0f);
 }
 
 void Sample2MidiProcessor::getStateInformation (juce::MemoryBlock& dest)
