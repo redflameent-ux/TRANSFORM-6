@@ -11,7 +11,7 @@
 [Setup]
 AppId={{6C1F4E7A-2B8D-4E6B-9A51-5A2B1D7C3E90}
 AppName=TRANSFORM-6
-AppVersion=1.0.0
+AppVersion=1.0.1
 AppPublisher=Pathfinder Pressings
 DefaultDirName={autopf}\TRANSFORM-6
 DisableDirPage=yes
