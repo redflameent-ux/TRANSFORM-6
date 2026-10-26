@@ -1,0 +1,106 @@
+name: Build Windows installer
+
+# Runs on GitHub's computers. Push the project (or click "Run workflow" on the
+# Actions tab) and you get TRANSFORM-6-Setup.exe to download at the end.
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+jobs:
+  plugin:
+    name: VST3 + app
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build plugin and standalone app
+        run: |
+          cmake -S plugin -B build -G "Visual Studio 17 2022" -A x64
+          cmake --build build --config Release --parallel
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plugin
+          path: |
+            build/TRANSFORM6_artefacts/Release/VST3/TRANSFORM-6.vst3
+            build/TRANSFORM6_artefacts/Release/Standalone/TRANSFORM-6.exe
+
+  engine:
+    name: Engine
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install engine libraries (CPU version — works on any PC)
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+          pip install -r engine/requirements.txt
+          pip install --no-deps basic-pitch==0.4.0
+          pip install pyinstaller
+
+      - name: Get the 6-part splitting model
+        shell: bash
+        run: |
+          mkdir -p models
+          curl -L --fail -o models/5c90dfd2-34c22ccb.th https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/5c90dfd2-34c22ccb.th
+          python -c "import demucs,os,shutil; shutil.copy(os.path.join(os.path.dirname(demucs.__file__),'remote','htdemucs_6s.yaml'),'models')"
+          ls -la models
+
+      - name: Run note-detection tests
+        shell: bash
+        run: |
+          cd engine
+          python tests/make_test_sample.py tests/out
+          python transform6_engine.py -i tests/out/test_lead.wav -o tests/out/r --mode single --tempo 100
+          python tests/score.py "tests/out/r/test_lead/test_lead - melodic.mid" tests/out/answer_key.json lead
+          python transform6_engine.py -i tests/out/test_drums.wav -o tests/out/r --mode single --single-type drums --tempo 100
+          python tests/score.py "tests/out/r/test_drums/test_drums - drums.mid" tests/out/answer_key.json drums
+
+      - name: Package engine
+        run: python engine/build_engine.py --models models
+
+      - name: Check packaged engine splits a real sample
+        shell: bash
+        run: |
+          E=engine/dist/transform6-engine/transform6-engine.exe
+          $E --version
+          $E -i engine/tests/out/test_mix.wav -o engine/tests/out/pkg --mode auto | tail -3
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: engine
+          path: engine/dist/transform6-engine
+
+  installer:
+    name: Installer
+    needs: [ plugin, engine ]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: plugin, path: stage/plugin }
+      - uses: actions/download-artifact@v4
+        with: { name: engine, path: stage/engine }
+
+      - name: Build TRANSFORM-6-Setup.exe
+        run: |
+          choco install innosetup --no-progress -y
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DStage="${{ github.workspace }}\stage" installer\Transform6.iss
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TRANSFORM-6-Setup
+          path: installer/Output/TRANSFORM-6-Setup.exe
+
+      - name: Publish release (when tagged v1.0.0 etc.)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer/Output/TRANSFORM-6-Setup.exe

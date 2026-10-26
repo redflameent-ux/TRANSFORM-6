@@ -1,0 +1,11 @@
+build/
+dist/
+stage/
+models/
+engine/build/
+engine/dist/
+engine/tests/out/
+installer/Output/
+__pycache__/
+*.pyc
+.DS_Store

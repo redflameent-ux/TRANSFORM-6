@@ -1,0 +1,14 @@
+# Install torch first (CPU build is smaller and works on any PC):
+#   pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+# Then:
+#   pip install -r requirements.txt
+#   pip install --no-deps basic-pitch==0.4.0
+demucs==4.1.0
+librosa>=0.10
+pretty_midi>=0.2.10
+mir_eval>=0.7
+resampy>=0.4
+soundfile>=0.12
+scipy>=1.10
+onnxruntime>=1.17
+numpy>=1.26
