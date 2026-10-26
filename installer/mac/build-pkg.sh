@@ -31,12 +31,18 @@ echo "Unpacking engines..."
 tar -xzf "$STAGE/mac-engine-arm64/mac-engine-arm64.tgz" -C "$WORK"
 rm -rf "$ROOT/Applications/TRANSFORM-6/engine-arm64"
 mv "$WORK/transform6-engine" "$ROOT/Applications/TRANSFORM-6/engine-arm64"
-tar -xzf "$STAGE/mac-engine-x86_64/mac-engine-x86_64.tgz" -C "$WORK"
-rm -rf "$ROOT/Applications/TRANSFORM-6/engine-x86_64"
-mv "$WORK/transform6-engine" "$ROOT/Applications/TRANSFORM-6/engine-x86_64"
-
 chmod +x "$ROOT/Applications/TRANSFORM-6/engine-arm64/transform6-engine"  || true
-chmod +x "$ROOT/Applications/TRANSFORM-6/engine-x86_64/transform6-engine" || true
+
+# x86_64 (Intel) engine is optional: only bundled when that artifact is present.
+if [ -f "$STAGE/mac-engine-x86_64/mac-engine-x86_64.tgz" ]; then
+  echo "Found Intel engine, bundling it too..."
+  tar -xzf "$STAGE/mac-engine-x86_64/mac-engine-x86_64.tgz" -C "$WORK"
+  rm -rf "$ROOT/Applications/TRANSFORM-6/engine-x86_64"
+  mv "$WORK/transform6-engine" "$ROOT/Applications/TRANSFORM-6/engine-x86_64"
+  chmod +x "$ROOT/Applications/TRANSFORM-6/engine-x86_64/transform6-engine" || true
+else
+  echo "No Intel engine artifact - building an Apple Silicon (arm64) only package."
+fi
 
 echo "Building component package..."
 pkgbuild --root "$ROOT" \

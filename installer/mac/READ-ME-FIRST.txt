@@ -34,4 +34,4 @@ USING IT
    - In a DAW: rescan plugins. VST3 shows under Pathfinder Pressings; AU shows
      as TRANSFORM-6.
 
-This build is universal - it runs natively on both Apple Silicon and Intel Macs.
+This is an Apple Silicon build (M1/M2/M3/M4). An Intel Mac build is coming later.
